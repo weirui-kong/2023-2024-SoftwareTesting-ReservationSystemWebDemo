@@ -1,0 +1,215 @@
+<!-- book.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: url('/static/background.jpg') no-repeat center center fixed;
+            -webkit-background-size: cover;
+            -moz-background-size: cover;
+            -o-background-size: cover;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        #logo {
+            height: 50px;
+        }
+
+        #system-title {
+            font-size: 1.5em;
+            margin-left: auto;
+            margin-right: auto;
+            color: white;
+        }
+
+        #user-info {
+            text-align: right;
+            display: flex;
+            align-items: center;
+            color: white;
+        }
+
+        #logout-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .content {
+            margin: 20px;
+            display: flex;
+            background-color: rgba(211, 211, 211, 0.5); /* 半透明浅灰色背景 */
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        #classroom-list {
+            flex: 1;
+            padding-right: 20px;
+
+        }
+
+        #reservation-list {
+            flex: 2;
+        }
+
+        #classroom-ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        #classroom-ul li {
+            margin-bottom: 10px;
+            padding: 10px;
+            cursor: pointer;
+            background-color: white;
+            border-radius: 5px;
+        }
+
+        #classroom-ul li:hover {
+            background-color: #e0f0f0; /* 鼠标悬停时的浅蓝色背景 */
+        }
+
+        .reservation-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+        }
+
+        .reservation-item.currentUser {
+            background-color: #add8e6; /* 当前用户的预约记录标浅蓝色 */
+        }
+
+        .footer {
+            text-align: center;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <!-- 左边的校徽 -->
+        <img id="logo" src="/static/logo.png" alt="校徽">
+
+        <!-- 中间显示系统标题 -->
+        <div id="system-title">西安科技大学教室预约系统</div>
+
+        <!-- 右边显示当前的账号和退出按钮 -->
+        <div id="user-info">
+            当前账号：{{ current_user }}
+        </div>
+        <button id="logout-button" onclick="logout()">退出</button>
+
+    </div>
+
+    <div class="content">
+        <div id="classroom-list">
+            <h2>教室列表</h2>
+            <ul id="classroom-ul">
+                {% for classroom in classrooms %}
+                               <li onclick="showReservations('{{ classroom[0] }}')">{{ classroom[1] }} @ {{ classroom[0] }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div id="reservation-list">
+            <h2>已预约列表</h2>
+            <div id="reservation-content">请选择一个教室查看预约信息。</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        西安科技大学 - 教室预约系统
+    </div>
+
+    <script>
+        // 实时显示时间
+        function updateTime() {
+            var currentTime = new Date();
+            var hours = currentTime.getHours();
+            var minutes = currentTime.getMinutes();
+            var seconds = currentTime.getSeconds();
+
+            // 在数字小于10的数字前加上0
+            minutes = (minutes < 10 ? "0" : "") + minutes;
+            seconds = (seconds < 10 ? "0" : "") + seconds;
+
+            var currentTimeString = hours + ":" + minutes + ":" + seconds;
+            document.getElementById("user-info").innerHTML = "当前账号：{{ current_user }} - 时间：" + currentTimeString;
+
+            // 每秒更新一次
+            setTimeout(updateTime, 1000);
+        }
+
+        updateTime(); // 首次调用
+
+        // 退出按钮的点击事件
+        function logout() {
+            // 移除cookie_table中对应记录
+            var currentToken = '{{ current_token }}';
+            fetch('/logout?token=' + currentToken, { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        // 重定向到登录页面
+                        window.location.href = '/login';
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+        // 点击教室列表项触发的事件
+        function showReservations(classroomId) {
+        // 获取已预约列表
+        fetch('/reservations?classroom_id=' + classroomId)
+            .then(response => response.json())
+            .then(data => {
+                var reservationContent = document.getElementById("reservation-content");
+                if (data.length > 0) {
+                    // 如果有预约信息，按时间顺序显示
+                    reservationContent.innerHTML = "";
+                    data.forEach(reservation => {
+                        var itemClass = reservation.user === '{{ current_user }}' ? 'currentUser' : '';
+                        var startTime = new Date(reservation[1] * 1000); // 转换为毫秒
+                        var endTime = new Date(reservation[2] * 1000); // 转换为毫秒
+
+                        reservationContent.innerHTML += `<div class="reservation-item ${itemClass}">预约时间: ${formatTime(startTime)} 至 ${formatTime(endTime)}，预约人: ${reservation[3]}</div>`;
+                    });
+                } else {
+                    // 没有预约信息
+                    reservationContent.innerHTML = "该教室暂无预约信息。";
+                }
+            })
+            .catch(error => console.error('Error:', error));
+
+        // 辅助函数，将时间对象格式化为自然语言形式
+        function formatTime(time) {
+            var options = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: false };
+            return time.toLocaleString('zh-CN', options);
+        }
+    }
+    </script>
+</body>
+</html>
